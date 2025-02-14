@@ -604,6 +604,12 @@ class FiveDOFRobot:
         if not radians:
             theta = np.radians(theta)
 
+        for joint, limits in enumerate(self.theta_limits):
+            if theta[joint] < limits[0]:
+                theta[joint] = limits[0]
+            elif theta[joint] > limits[1]:
+                theta[joint] = limits[1]
+
         self.DH = [
             [theta[0], self.l1, 0, np.pi / 2],
             [(np.pi / 2) - theta[1], 0, self.l2, 0],
@@ -632,10 +638,6 @@ class FiveDOFRobot:
 
         # Calculate robot points (positions of joints)
         self.calc_robot_points()
-
-    # def calc_dh_params(self, theta: list, radians=False):
-
-    # def calc_transform_matrices(self, theta: list, radians=False):
 
     def calc_inverse_kinematics(self, EE: EndEffector, soln=0):
         """
