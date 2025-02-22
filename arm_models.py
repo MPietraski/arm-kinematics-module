@@ -5,6 +5,10 @@ from helper_fcns.utils import EndEffector, rotm_to_euler
 
 PI = 3.1415926535897932384
 np.set_printoptions(precision=3)
+K = [0, 0, 1]
+DELAY = 50  # milliseconds
+DET_J_THRESH = 3 * 10 ^ -5
+VEL_SCALE = 0.4
 
 
 class Robot:
@@ -576,6 +580,14 @@ class FiveDOFRobot:
             [-np.pi, np.pi],
         ]
 
+        self.vel_limits = [
+            [-5, 5],
+            [-3, 3],
+            [-3, 3],
+            [-3, 3],
+            [-5, 5],
+        ]
+
         # End-effector object
         self.ee = EndEffector()
 
@@ -589,7 +601,9 @@ class FiveDOFRobot:
 
         ########################################
 
-        # insert your additional code here
+        self.jacobian = np.zeros((3, 5))
+        self.inv_jacobian = np.zeros((5, 3))
+        self.joint_velos = np.zeros(5)
 
         ########################################
 
@@ -614,7 +628,7 @@ class FiveDOFRobot:
             [theta[0], self.l1, 0, np.pi / 2],
             [(np.pi / 2) - theta[1], 0, self.l2, 0],
             [-theta[2], 0, self.l3, 0],
-            [-theta[3], 0, self.l4, theta[4]],
+            [-theta[3], 0, self.l4 + self.l5, theta[4]],
             [(-np.pi / 2), 0, 0, (-np.pi / 2)],
         ]
 
@@ -670,11 +684,39 @@ class FiveDOFRobot:
         Args:
             vel: Desired end-effector velocity (3x1 vector).
         """
-        ########################################
+        T_cumulative = [np.eye(4)]
+        for i in range(self.num_dof):
+            T_cumulative.append(T_cumulative[-1] @ self.T[i])
 
-        # insert your code here
+        for index, transform in enumerate(T_cumulative):
+            if index == 0:
+                self.jacobian[:, index] = np.cross(K, T_cumulative[-1][:3, 3])
+                continue
+            elif index == self.num_dof:
+                break
+            self.jacobian[:, index] = np.cross(
+                np.dot(transform[:3, :3], K),
+                (T_cumulative[-1][:3, 3] - transform[:3, 3]),
+            )
 
-        ########################################
+        self.inv_jacobian = np.linalg.pinv(self.jacobian)
+
+        det_J = np.linalg.det(np.dot(self.jacobian, np.transpose(self.jacobian)))
+
+        if abs(det_J) < DET_J_THRESH:
+            vel = vel * VEL_SCALE
+
+        self.joint_velos = np.dot(self.inv_jacobian, vel)
+
+        for joint, limits in enumerate(self.vel_limits):
+            if self.joint_velos[joint] < limits[0]:
+                self.joint_velos[joint] = limits[0]
+            elif self.joint_velos[joint] > limits[1]:
+                self.joint_velos[joint] = limits[1]
+
+        joint_increments = self.joint_velos * (1 / 1000) * DELAY
+
+        self.theta = self.theta + joint_increments
 
         # Recompute robot points based on updated joint angles
         self.calc_forward_kinematics(self.theta, radians=True)
