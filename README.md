@@ -2,7 +2,7 @@
 ## Forward Position and Velocity Kinematics on a 5-DOF Hiwonder Robot Arm
 For a 5-DOF robot arm of serial links, apply forward position and velocity kinematics to control motion of the robot arm with a gamepad.
 
-***fix link to report to be view only version, include gif of robot moving here***
+***include gif of robot moving here***
 
 
 This mini project could be separated into 3 separate problems which are listed and explained below. For the report that details how we approached and implemented each of our solutions, see [this document.](https://docs.google.com/document/d/13dFPQtsWIF-s6bF55bizwVpNnhvOx7KRk7ooc8nubO8/edit?usp=sharing)
@@ -91,4 +91,6 @@ Implementing this successfully allows the forward velocity kinematics to be used
 
 **Implement the resolved-rate motion control (RRMC) through gamepad control of the 5DOF robot hardware**
 
-***talk about gamepad stuff***
+The gamepad is mapped to control the end-effector like this:
+
+![alt text](media/gamepad_mapping.png)
