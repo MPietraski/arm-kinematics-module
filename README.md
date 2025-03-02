@@ -11,14 +11,25 @@ This mini project could be separated into 3 separate problems which are listed a
 ### Problem 1 
 **Derive the DH parameters and table for the 5DOF robot platform**
 
-DH parameters refer to the 
+DH parameters (Denavit-Hartenberg parameters) refer to the specific relationship between a coordinate frame i and the coordinate frame i-1 before it. A table is created with a row for each joint, and a column for these 4 variables:
 
-***put in DH parameter stuff***
+- theta: the angle between x(i-1) and x(i) about z(i-1)
+- d: the distance from the origin of frame i-1 to x(i) along z(i-1)
+- a: the distance between z(i-1) and z(i) along x(i)
+- alpha: the angle between z(i-1) and z(i) about x(i)
 
-They rely on specific rules being followed when coordinate frames are assigned.
 
-***insert coordinate frame rules***
 
+They rely on specific rules being followed when coordinate frames are assigned. These rules are taken from [Automatic Addison.](https://automaticaddison.com/how-to-assign-denavit-hartenberg-frames-to-robotic-arms/)
+
+1. The z-axis of each joint's coordinate frame is the axis of rotation for a revolute joint, and the direction of motion for a prismatic joint.
+2. The x-axis must be perpendicular to both the current and previous z-axes.
+3. The y-axis is determined through the right-hand-rule.
+4. The x-axis must intersect the previous z-axis (this does not apply to frame 0).
+
+A 5 Degree-of-Freedom robot platform will have 6 frames (including the end-effector), and 5 rows in its DH table.
+
+&nbsp;  
 
 **Derive the FPK equations and implement in software (with verification in the Viz tool)**
 
@@ -28,7 +39,11 @@ FPK stands for forward position kinematics. FPK equations allow us to determine 
 
 We use homogeneous transformation matrices because they can be defined with the DH parameters. They can also be mutliplied together such that if all frames on a robot arm are multiplied together, a new HTM can describe the relationship from the origin frame to the EE frame.
 
-***how HTMs are formed with the DH parameters***
+An HTM for a joint can be formed by plugging these values from that joint's row in the DH table into a matrix (c is an abbreviation for cosine, and s is an abbreviation for sine):
+
+![alt text](media/DHtoHTM.png)
+
+Several HTMs can be multiplied together to combine the transformation across several joints into one new matrix.
 
 ***
 ### Problem 2
