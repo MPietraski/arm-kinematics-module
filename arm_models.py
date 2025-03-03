@@ -601,6 +601,61 @@ class FiveDOFRobot:
             theta: List of joint angles (in degrees or radians).
             radians: Boolean flag to indicate if input angles are in radians.
         """
+        if not radians:
+            theta = np.radians(theta)
+
+        self.theta = theta
+
+        for joint, limits in enumerate(self.theta_limits):
+            if self.theta[joint] < limits[0]:
+                self.theta[joint] = limits[0]
+            elif self.theta[joint] > limits[1]:
+                self.theta[joint] = limits[1]
+
+        # self.DH = [
+        #     [theta[0], self.l1, 0, np.pi/2],
+        #     [theta[1], 0, self.l2, 0],
+        #     [theta[2], 0, self.l3, 0],
+        #     [np.pi/2-theta[3], 0, 0, np.pi/2],
+        #     [0, self.l4, 0, 0],
+        #     [np.pi/2+theta[4], self.l5, 0, 0]
+        # ]
+
+        # for i in range(len(self.DH)):
+        #     self.T[i] = [
+        #         [cos(self.DH[i][0]), -sin(self.DH[i][0])*cos(self.DH[i][3]), 
+        #          sin(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*cos(self.DH[i][0])],
+        #         [sin(self.DH[i][0]), cos(self.DH[i][0])*cos(self.DH[i][3]), 
+        #          -cos(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*sin(self.DH[i][0])],
+        #         [0, sin(self.DH[i][3]), cos(self.DH[i][3]), self.DH[i][1]],
+        #         [0, 0, 0, 1]
+        #     ]
+        self.DH = [
+            [-self.theta[0], self.l1, 0, np.pi / 2],
+            [(np.pi / 2) - self.theta[1], 0, self.l2, 0],
+            [-self.theta[2], 0, self.l3, 0],
+            [-self.theta[3], 0, self.l4+self.l5, self.theta[4]],
+            [(-np.pi / 2), 0, 0, (-np.pi / 2)],
+        ]
+
+        for index, dh_item in enumerate(self.DH):
+            self.T[index] = [
+                [
+                    cos(dh_item[0]),
+                    -sin(dh_item[0]) * cos(dh_item[3]),
+                    sin(dh_item[0]) * sin(dh_item[3]),
+                    dh_item[2] * cos(dh_item[0]),
+                ],
+                [
+                    sin(dh_item[0]),
+                    cos(dh_item[0]) * cos(dh_item[3]),
+                    -cos(dh_item[0]) * sin(dh_item[3]),
+                    dh_item[2] * sin(dh_item[0]),
+                ],
+                [0, sin(dh_item[3]), cos(dh_item[3]), dh_item[1]],
+                [0, 0, 0, 1],
+            ]
+            
 
         # Calculate robot points (positions of joints)
         self.calc_robot_points()
@@ -640,6 +695,61 @@ class FiveDOFRobot:
         Args:
             vel: Desired end-effector velocity (3x1 vector).
         """
+        
+        Jv = np.zeros((self.num_dof, 3))
+        H0_n = np.eye(4)
+        for i in range(len(self.T)):
+            H0_n = H0_n @ self.T[i]
+        r0_n = H0_n[:3,3]
+
+        # Compute the jacobian
+        for i in range(self.num_dof):
+            H0_i = np.eye(4)
+            for j in range(i):
+                H0_i = H0_i @ self.T[j]
+
+            R0_i = H0_i[:3,:3]
+            r0_i = H0_i[:3,3]
+            ri_n = r0_n-r0_i
+
+            zi = R0_i @ np.array([[0],[0],[1]])
+            zi_T = np.transpose(zi)
+            
+            Jvi = np.cross(zi_T, ri_n)
+            Jv[i] = Jvi[0]
+
+        Jv = np.transpose(Jv)
+        print(Jv)
+        
+        # (pseudo) Invert jacobian
+        Jv_inv = np.linalg.pinv(Jv)
+
+        # Compute joint velocities
+
+        # det_J = np.linalg.det(np.dot(Jv, np.transpose(Jv)))
+        # print(det_J)
+
+        # if abs(det_J) < 0.0001:
+        #     vel = np.multiply(vel,1/abs(det_J)/100000)
+        # if abs(det_J) < 0.000001:
+        #     vel = np.multiply(vel,0.1)
+
+        dth_k = Jv_inv @ vel
+
+        print("dth_k")
+        print(dth_k)
+        for i in range(len(dth_k)):
+            if(dth_k[i] > 3):
+                dth_k  = dth_k * 3/dth_k[i]
+            elif(dth_k[i] < -3):
+                dth_k  = dth_k * -3/dth_k[i]
+        print(dth_k)
+
+        # Compute the next joint config
+        dt = 0.03   # from main_arm.py 273
+        self.theta = np.add(self.theta, np.multiply(dt, dth_k))
+
+
         ########################################
 
         # insert your code here
@@ -657,11 +767,11 @@ class FiveDOFRobot:
 
         # Precompute cumulative transformations to avoid redundant calculations
         T_cumulative = [np.eye(4)]
-        for i in range(self.num_dof):
+        for i in range(len(self.T)):
             T_cumulative.append(T_cumulative[-1] @ self.T[i])
 
         # Calculate the robot points by applying the cumulative transformations
-        for i in range(1, 6):
+        for i in range(1, self.num_dof+1):
             self.points[i] = T_cumulative[i] @ self.points[0]
 
         # Calculate EE position and rotation
