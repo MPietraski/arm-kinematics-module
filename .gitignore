@@ -1,2 +1,4 @@
 __pycache__/
 .venv/
+pyenv/
+viz_env/
