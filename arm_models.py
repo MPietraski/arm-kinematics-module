@@ -1,10 +1,11 @@
-from math import sin, cos
+from math import sin, cos, atan, acos, asin, sqrt, atan2
 import numpy as np
 from matplotlib.figure import Figure
-from helper_fcns.utils import EndEffector, rotm_to_euler
+from helper_fcns.utils import EndEffector, rotm_to_euler, euler_to_rotm, dh_to_matrix
 
 PI = 3.1415926535897932384
 np.set_printoptions(precision=3)
+K = [0, 0, 1]
 
 
 class Robot:
@@ -236,7 +237,9 @@ class Robot:
         theta_text += " ]"
 
         textstr = pose_text + "\n" + theta_text
-        self.sub1.text2D(0.2, 0.02, textstr, fontsize=13, transform=self.fig.transFigure)
+        self.sub1.text2D(
+            0.2, 0.02, textstr, fontsize=13, transform=self.fig.transFigure
+        )
 
         self.sub1.set_xlim(-self.plot_limits[0], self.plot_limits[0])
         self.sub1.set_ylim(-self.plot_limits[1], self.plot_limits[1])
@@ -621,18 +624,18 @@ class FiveDOFRobot:
 
         # for i in range(len(self.DH)):
         #     self.T[i] = [
-        #         [cos(self.DH[i][0]), -sin(self.DH[i][0])*cos(self.DH[i][3]), 
+        #         [cos(self.DH[i][0]), -sin(self.DH[i][0])*cos(self.DH[i][3]),
         #          sin(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*cos(self.DH[i][0])],
-        #         [sin(self.DH[i][0]), cos(self.DH[i][0])*cos(self.DH[i][3]), 
+        #         [sin(self.DH[i][0]), cos(self.DH[i][0])*cos(self.DH[i][3]),
         #          -cos(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*sin(self.DH[i][0])],
         #         [0, sin(self.DH[i][3]), cos(self.DH[i][3]), self.DH[i][1]],
         #         [0, 0, 0, 1]
         #     ]
         self.DH = [
-            [-self.theta[0], self.l1, 0, np.pi / 2],
-            [(np.pi / 2) - self.theta[1], 0, self.l2, 0],
+            [self.theta[0], self.l1, 0, np.pi / 2],
+            [(np.pi / 2) + self.theta[1], 0, self.l2, 0],
             [-self.theta[2], 0, self.l3, 0],
-            [-self.theta[3], 0, self.l4+self.l5, self.theta[4]],
+            [self.theta[3], 0, self.l4 + self.l5, self.theta[4]],
             [(-np.pi / 2), 0, 0, (-np.pi / 2)],
         ]
 
@@ -653,14 +656,9 @@ class FiveDOFRobot:
                 [0, sin(dh_item[3]), cos(dh_item[3]), dh_item[1]],
                 [0, 0, 0, 1],
             ]
-            
 
         # Calculate robot points (positions of joints)
         self.calc_robot_points()
-
-    # def calc_dh_params(self, theta: list, radians=False):
-
-    # def calc_transform_matrices(self, theta: list, radians=False):
 
     def calc_inverse_kinematics(self, EE: EndEffector, soln=0):
         """
@@ -672,7 +670,56 @@ class FiveDOFRobot:
         """
         ########################################
 
-        # insert your code here
+        x, y, z = EE.x, EE.y, EE.z
+
+        R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz))
+
+        print((self.l4 + self.l5) * (R_05 @ K))
+        p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05 @ K))
+        wx = p_wrist[0]
+        wy = p_wrist[1]
+        wz = p_wrist[2]
+
+        # wx = x - abs((self.l4 + self.l5) * R_05[0, 2])
+        # wy = y - abs((self.l4 + self.l5) * R_05[1, 2])
+        # wz = z - abs((self.l4 + self.l5) * R_05[2, 2])
+
+        r = sqrt((wx**2 + wy**2) + ((wz - self.l1) ** 2))
+
+        print(wx, wy, wz)
+        print(r)
+
+        self.theta[0] = atan2(y, x)
+        self.theta[1] = acos(
+            (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2)
+        ) + atan2(sqrt(wx**2 + wy**2), (wz - self.l1))
+        self.theta[2] = acos(
+            (wx**2 + wy**2 - self.l2**2 - self.l3**2 + (wz - self.l1) ** 2)
+            / 2
+            * self.l2
+            * self.l3
+        )
+
+        mini_DH = [
+            [self.theta[0], self.l1, 0, np.pi / 2],
+            [(np.pi / 2) + self.theta[1], 0, self.l2, 0],
+            [-self.theta[2], 0, self.l3, 0],
+        ]
+
+        t_03 = np.eye(4)
+        for dh_item in mini_DH:
+            t_temp = dh_to_matrix(dh_item)
+            t_03 = t_03 @ t_temp
+
+        R_03 = t_03[:3, :3]
+        R_35 = np.transpose(R_03) @ R_05
+
+        print(R_35)
+
+        r_wrist = rotm_to_euler(R_35)
+
+        self.theta[3] = r_wrist[2]
+        self.theta[4] = 0 # need to add this one
 
         ########################################
 
@@ -693,12 +740,12 @@ class FiveDOFRobot:
         Args:
             vel: Desired end-effector velocity (3x1 vector).
         """
-        
+
         Jv = np.zeros((self.num_dof, 3))
         H0_n = np.eye(4)
         for i in range(len(self.T)):
             H0_n = H0_n @ self.T[i]
-        r0_n = H0_n[:3,3]
+        r0_n = H0_n[:3, 3]
 
         # Compute the jacobian
         for i in range(self.num_dof):
@@ -706,19 +753,19 @@ class FiveDOFRobot:
             for j in range(i):
                 H0_i = H0_i @ self.T[j]
 
-            R0_i = H0_i[:3,:3]
-            r0_i = H0_i[:3,3]
-            ri_n = r0_n-r0_i
+            R0_i = H0_i[:3, :3]
+            r0_i = H0_i[:3, 3]
+            ri_n = r0_n - r0_i
 
-            zi = R0_i @ np.array([[0],[0],[1]])
+            zi = R0_i @ np.array([[0], [0], [1]])
             zi_T = np.transpose(zi)
-            
+
             Jvi = np.cross(zi_T, ri_n)
             Jv[i] = Jvi[0]
 
         Jv = np.transpose(Jv)
         print(Jv)
-        
+
         # (pseudo) Invert jacobian
         Jv_inv = np.linalg.pinv(Jv)
 
@@ -737,16 +784,15 @@ class FiveDOFRobot:
         print("dth_k")
         print(dth_k)
         for i in range(len(dth_k)):
-            if(dth_k[i] > 3):
-                dth_k  = dth_k * 3/dth_k[i]
-            elif(dth_k[i] < -3):
-                dth_k  = dth_k * -3/dth_k[i]
+            if dth_k[i] > 3:
+                dth_k = dth_k * 3 / dth_k[i]
+            elif dth_k[i] < -3:
+                dth_k = dth_k * -3 / dth_k[i]
         print(dth_k)
 
         # Compute the next joint config
-        dt = 0.03   # from main_arm.py 273
+        dt = 0.03  # from main_arm.py 273
         self.theta = np.add(self.theta, np.multiply(dt, dth_k))
-
 
         ########################################
 
@@ -769,7 +815,7 @@ class FiveDOFRobot:
             T_cumulative.append(T_cumulative[-1] @ self.T[i])
 
         # Calculate the robot points by applying the cumulative transformations
-        for i in range(1, self.num_dof+1):
+        for i in range(1, self.num_dof + 1):
             self.points[i] = T_cumulative[i] @ self.points[0]
 
         # Calculate EE position and rotation
