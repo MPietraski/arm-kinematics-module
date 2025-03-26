@@ -674,6 +674,8 @@ class FiveDOFRobot:
 
         R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz))
 
+        print(R_05)
+
         print((self.l4 + self.l5) * (R_05 @ K))
         p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05 @ K))
         wx = p_wrist[0]
@@ -829,7 +831,7 @@ class FiveDOFRobot:
 
         # Extract and assign the RPY (roll, pitch, yaw) from the rotation matrix
         rpy = rotm_to_euler(self.T_ee[:3, :3])
-        self.ee.rotx, self.ee.roty, self.ee.rotz = rpy[2], rpy[1], rpy[0]
+        self.ee.rotx, self.ee.roty, self.ee.rotz = rpy[0], rpy[1], rpy[2]
 
         # Calculate the EE axes in space (in the base frame)
         self.EE = [self.ee.x, self.ee.y, self.ee.z]
