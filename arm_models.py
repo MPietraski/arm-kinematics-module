@@ -6,6 +6,7 @@ from helper_fcns.utils import EndEffector, rotm_to_euler, euler_to_rotm, dh_to_m
 PI = 3.1415926535897932384
 np.set_printoptions(precision=3)
 K = [0, 0, 1]
+K2 = [1, 0, 0]
 
 
 class Robot:
@@ -613,24 +614,6 @@ class FiveDOFRobot:
             elif self.theta[joint] > limits[1]:
                 self.theta[joint] = limits[1]
 
-        # self.DH = [
-        #     [theta[0], self.l1, 0, np.pi/2],
-        #     [theta[1], 0, self.l2, 0],
-        #     [theta[2], 0, self.l3, 0],
-        #     [np.pi/2-theta[3], 0, 0, np.pi/2],
-        #     [0, self.l4, 0, 0],
-        #     [np.pi/2+theta[4], self.l5, 0, 0]
-        # ]
-
-        # for i in range(len(self.DH)):
-        #     self.T[i] = [
-        #         [cos(self.DH[i][0]), -sin(self.DH[i][0])*cos(self.DH[i][3]),
-        #          sin(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*cos(self.DH[i][0])],
-        #         [sin(self.DH[i][0]), cos(self.DH[i][0])*cos(self.DH[i][3]),
-        #          -cos(self.DH[i][0])*sin(self.DH[i][3]), self.DH[i][2]*sin(self.DH[i][0])],
-        #         [0, sin(self.DH[i][3]), cos(self.DH[i][3]), self.DH[i][1]],
-        #         [0, 0, 0, 1]
-        #     ]
         self.DH = [
             [self.theta[0], self.l1, 0, np.pi / 2],
             [(np.pi / 2) + self.theta[1], 0, self.l2, 0],
@@ -669,36 +652,53 @@ class FiveDOFRobot:
             soln: Optional parameter for multiple solutions (not implemented).
         """
         ########################################
-
+        print("")
         x, y, z = EE.x, EE.y, EE.z
+        print("EE", x, y, z, np.rad2deg(EE.rotx), np.rad2deg(EE.roty), np.rad2deg(EE.rotz))
 
-        R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz))
+        R_05 = euler_to_rotm((EE.rotz, EE.roty, EE.rotx)) # TODO change back to x, y, z
+        R_05_K = R_05 @ K
+        print("R05\n", np.round(R_05, 3))
+        print("R05 K", np.round((R_05_K), 3))
 
-        print((self.l4 + self.l5) * (R_05 @ K))
-        p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05 @ K))
+        print("W disp", np.round((self.l4 + self.l5) * (R_05_K), 3))
+        p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05_K))
+
         wx = p_wrist[0]
         wy = p_wrist[1]
         wz = p_wrist[2]
+        print("wrist", np.round(wx, 2), np.round(wy, 2), np.round(wz, 2))
 
         # wx = x - abs((self.l4 + self.l5) * R_05[0, 2])
         # wy = y - abs((self.l4 + self.l5) * R_05[1, 2])
         # wz = z - abs((self.l4 + self.l5) * R_05[2, 2])
 
         r = sqrt((wx**2 + wy**2) + ((wz - self.l1) ** 2))
+        print("r", r)
 
-        print(wx, wy, wz)
-        print(r)
+        self.theta[0] = atan2(y, x) # seems to give desired - 180
+        print("th1", np.rad2deg(self.theta[0])) 
 
-        self.theta[0] = atan2(y, x)
-        self.theta[1] = acos(
-            (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2)
-        ) + atan2(sqrt(wx**2 + wy**2), (wz - self.l1))
-        self.theta[2] = acos(
-            (wx**2 + wy**2 - self.l2**2 - self.l3**2 + (wz - self.l1) ** 2)
-            / 2
-            * self.l2
-            * self.l3
-        )
+        # print((r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2))
+        # self.theta[1] = acos(
+        #     (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2)
+        # ) + atan2(sqrt(wx**2 + wy**2), (wz - self.l1))
+        # print("th2", np.rad2deg(self.theta[1]))
+
+        # self.theta[2] = acos(
+        #     (wx**2 + wy**2 - self.l2**2 - self.l3**2 + (wz - self.l1) ** 2)
+        #     / 2
+        #     * self.l2
+        #     * self.l3
+        # )
+
+        alpha = acos( (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2) )
+        phi = acos( (wz - self.l1) / (r) )
+        self.theta[1] = alpha + phi
+        print("th2", np.rad2deg(self.theta[1]))
+
+        self.theta[2] = acos( (r**2 - self.l2**2 - self.l3**2) / (2 * self.l2 * self.l3) )
+        print("th3", np.rad2deg(self.theta[2]))
 
         mini_DH = [
             [self.theta[0], self.l1, 0, np.pi / 2],
@@ -713,12 +713,12 @@ class FiveDOFRobot:
 
         R_03 = t_03[:3, :3]
         R_35 = np.transpose(R_03) @ R_05
-
-        print(R_35)
-
+        
+        # TODO fix theta 4 calc
         r_wrist = rotm_to_euler(R_35)
 
-        self.theta[3] = r_wrist[2]
+        self.theta[3] = r_wrist[0]
+        print("th4", np.rad2deg(self.theta[3]))
         self.theta[4] = 0 # need to add this one
 
         ########################################
@@ -771,14 +771,6 @@ class FiveDOFRobot:
 
         # Compute joint velocities
 
-        # det_J = np.linalg.det(np.dot(Jv, np.transpose(Jv)))
-        # print(det_J)
-
-        # if abs(det_J) < 0.0001:
-        #     vel = np.multiply(vel,1/abs(det_J)/100000)
-        # if abs(det_J) < 0.000001:
-        #     vel = np.multiply(vel,0.1)
-
         dth_k = Jv_inv @ vel
 
         print("dth_k")
@@ -793,12 +785,6 @@ class FiveDOFRobot:
         # Compute the next joint config
         dt = 0.03  # from main_arm.py 273
         self.theta = np.add(self.theta, np.multiply(dt, dth_k))
-
-        ########################################
-
-        # insert your code here
-
-        ########################################
 
         # Recompute robot points based on updated joint angles
         self.calc_forward_kinematics(self.theta, radians=True)
