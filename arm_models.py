@@ -656,7 +656,7 @@ class FiveDOFRobot:
         x, y, z = EE.x, EE.y, EE.z
         print("EE", x, y, z, np.rad2deg(EE.rotx), np.rad2deg(EE.roty), np.rad2deg(EE.rotz))
 
-        R_05 = euler_to_rotm((EE.rotz, EE.roty, EE.rotx)) # TODO change back to x, y, z
+        R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz)) 
         R_05_K = R_05 @ K
         print("R05\n", np.round(R_05, 3))
         print("R05 K", np.round((R_05_K), 3))
@@ -676,7 +676,7 @@ class FiveDOFRobot:
         r = sqrt((wx**2 + wy**2) + ((wz - self.l1) ** 2))
         print("r", r)
 
-        self.theta[0] = atan2(y, x) # seems to give desired - 180
+        self.theta[0] = atan2(y, x) + np.pi # seems to give desired - 180
         print("th1", np.rad2deg(self.theta[0])) 
 
         # print((r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2))
@@ -695,10 +695,10 @@ class FiveDOFRobot:
         alpha = acos( (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2) )
         phi = acos( (wz - self.l1) / (r) )
         self.theta[1] = alpha + phi
-        print("th2", np.rad2deg(self.theta[1]))
+        print("th2", np.round(np.rad2deg(self.theta[1]), 2))
 
         self.theta[2] = acos( (r**2 - self.l2**2 - self.l3**2) / (2 * self.l2 * self.l3) )
-        print("th3", np.rad2deg(self.theta[2]))
+        print("th3", np.round(np.rad2deg(self.theta[2]), 2))
 
         mini_DH = [
             [self.theta[0], self.l1, 0, np.pi / 2],
@@ -713,13 +713,19 @@ class FiveDOFRobot:
 
         R_03 = t_03[:3, :3]
         R_35 = np.transpose(R_03) @ R_05
+        print(np.round(R_35, 3))
         
         # TODO fix theta 4 calc
-        r_wrist = rotm_to_euler(R_35)
+        # r_wrist = rotm_to_euler(R_35)
+        # print(np.round(np.rad2deg(r_wrist), 2))
+        # for n in range(9):
+        #     print(np.round(np.rad2deg(asin(R_35[int(n/3), n%3])),2))
 
-        self.theta[3] = r_wrist[0]
-        print("th4", np.rad2deg(self.theta[3]))
-        self.theta[4] = 0 # need to add this one
+        # self.theta[3] = r_wrist[0]
+        self.theta[3] = asin(R_35[1,2])
+        print("th4", np.round(np.rad2deg(self.theta[3]), 2))
+        self.theta[4] = -asin(R_35[2,0])
+        print("th5", np.round(np.rad2deg(self.theta[4]), 2))
 
         ########################################
 
