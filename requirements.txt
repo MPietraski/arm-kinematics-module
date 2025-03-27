@@ -11,5 +11,6 @@ pynput==1.7.7
 pyparsing==3.2.1
 python-dateutil==2.9.0.post0
 python-xlib==0.33
+pyYAML==6.0.2
 six==1.17.0
 tk==0.1.0

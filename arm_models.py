@@ -52,10 +52,12 @@ class Robot:
             self.robot = FiveDOFRobot()
 
         self.origin = [0.0, 0.0, 0.0]
-        self.axes_length = 0.075
+        self.axes_length = 0.04
         self.point_x, self.point_y, self.point_z = [], [], []
+        self.waypoint_x, self.waypoint_y, self.waypoint_z = [], [], []
+        self.waypoint_rotx, self.waypoint_roty, self.waypoint_rotz = [], [], []
         self.show_animation = show_animation
-        self.plot_limits = [0.75, 0.75, 1.0]
+        self.plot_limits = [0.65, 0.65, 0.8]
 
         if self.show_animation:
             self.fig = Figure(figsize=(12, 10), dpi=100)
@@ -168,6 +170,27 @@ class Robot:
                 [point[0], point[0]], [point[2], 0.0], "b--", linewidth=line_width
             )  # Z line
 
+    def plot_waypoints(self):
+        """
+        Plots the waypoints in the 3D visualization
+        """
+        # draw the points
+        self.sub1.plot(self.waypoint_x, self.waypoint_y, self.waypoint_z, 'or', markersize=8)
+
+
+    def update_waypoints(self, waypoints: list):
+        """
+        Updates the waypoints into a member variable
+        """
+        for i in range(len(waypoints)):
+            self.waypoint_x.append(waypoints[i][0])
+            self.waypoint_y.append(waypoints[i][1])
+            self.waypoint_z.append(waypoints[i][2])
+            # self.waypoint_rotx.append(waypoints[i][3])
+            # self.waypoint_roty.append(waypoints[i][4])
+            # self.waypoint_rotz.append(waypoints[i][5])
+
+
     def plot_3D(self):
         """
         Plots the 3D visualization of the robot, including the robot's links, end-effector, and reference frames.
@@ -196,6 +219,14 @@ class Robot:
             markerfacecolor="m",
             markersize=12,
         )
+
+
+        # draw the waypoints
+        self.plot_waypoints()
+
+
+        # draw the waypoints
+        self.plot_waypoints()
 
         # draw the EE
         self.sub1.plot(EE.x, EE.y, EE.z, "bo")
@@ -249,7 +280,9 @@ class Robot:
         self.sub1.set_ylabel("y [m]")
 
 
-class TwoDOFRobot:
+
+
+class TwoDOFRobot():
     """
     Represents a 2-degree-of-freedom (DOF) robot arm with two joints and one end effector.
     Includes methods for calculating forward kinematics (FPK), inverse kinematics (IPK),
