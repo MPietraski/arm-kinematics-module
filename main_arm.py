@@ -136,9 +136,16 @@ class Visualizer:
 
         self.ik2_move_button = ttk.Button(self.control_frame, text="Solve 2", command=self.solve_IK2)
         self.ik2_move_button.grid(column=1, row=row_number, columnspan=1, pady=2)
+        row_number += 3
 
-        self.ik3_move_button = ttk.Button(self.control_frame, text="Num Solve", command=self.numerical_solve)
-        self.ik3_move_button.grid(column=2, row=row_number, columnspan=1, pady=2)
+        self.ik3_move_button = ttk.Button(self.control_frame, text="Solve 3", command=self.solve_IK3)
+        self.ik3_move_button.grid(column=0, row=row_number, columnspan=1, pady=2)
+
+        self.ik4_move_button = ttk.Button(self.control_frame, text="Solve 4", command=self.solve_IK4)
+        self.ik4_move_button.grid(column=1, row=row_number, columnspan=1, pady=2)
+
+        self.ik5_move_button = ttk.Button(self.control_frame, text="Num Solve", command=self.numerical_solve)
+        self.ik5_move_button.grid(column=2, row=row_number, columnspan=1, pady=2)
         row_number += 3
 
         # ------------------------------------------------------------------------------------------------
@@ -228,6 +235,34 @@ class Visualizer:
         EE.rotz = float(self.pose_button[5].get())
 
         self.update_IK(pose=EE, soln=1)
+
+    def solve_IK3(self):
+        """
+        Solves the inverse kinematics for a given end-effector pose using the third solution.
+        """
+        EE = EndEffector()
+        EE.x = float(self.pose_button[0].get())
+        EE.y = float(self.pose_button[1].get())
+        EE.z = float(self.pose_button[2].get())
+        EE.rotx = float(self.pose_button[3].get())
+        EE.roty = float(self.pose_button[4].get())
+        EE.rotz = float(self.pose_button[5].get())
+
+        self.update_IK(pose=EE, soln=2)
+
+    def solve_IK4(self):
+        """
+        Solves the inverse kinematics for a given end-effector pose using the fourth solution.
+        """
+        EE = EndEffector()
+        EE.x = float(self.pose_button[0].get())
+        EE.y = float(self.pose_button[1].get())
+        EE.z = float(self.pose_button[2].get())
+        EE.rotx = float(self.pose_button[3].get())
+        EE.roty = float(self.pose_button[4].get())
+        EE.rotz = float(self.pose_button[5].get())
+
+        self.update_IK(pose=EE, soln=3)
 
 
     def numerical_solve(self):

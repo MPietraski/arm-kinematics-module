@@ -1,7 +1,14 @@
 from math import sin, cos, atan, acos, asin, sqrt, atan2
 import numpy as np
 from matplotlib.figure import Figure
-from helper_fcns.utils import EndEffector, rotm_to_euler, euler_to_rotm, dh_to_matrix
+from helper_fcns.utils import (
+    EndEffector,
+    rotm_to_euler,
+    euler_to_rotm,
+    dh_to_matrix,
+    wraptopi,
+    check_joint_limits,
+)
 
 PI = 3.1415926535897932384
 np.set_printoptions(precision=3)
@@ -175,8 +182,9 @@ class Robot:
         Plots the waypoints in the 3D visualization
         """
         # draw the points
-        self.sub1.plot(self.waypoint_x, self.waypoint_y, self.waypoint_z, 'or', markersize=8)
-
+        self.sub1.plot(
+            self.waypoint_x, self.waypoint_y, self.waypoint_z, "or", markersize=8
+        )
 
     def update_waypoints(self, waypoints: list):
         """
@@ -189,7 +197,6 @@ class Robot:
             # self.waypoint_rotx.append(waypoints[i][3])
             # self.waypoint_roty.append(waypoints[i][4])
             # self.waypoint_rotz.append(waypoints[i][5])
-
 
     def plot_3D(self):
         """
@@ -220,10 +227,8 @@ class Robot:
             markersize=12,
         )
 
-
         # draw the waypoints
         self.plot_waypoints()
-
 
         # draw the waypoints
         self.plot_waypoints()
@@ -280,9 +285,7 @@ class Robot:
         self.sub1.set_ylabel("y [m]")
 
 
-
-
-class TwoDOFRobot():
+class TwoDOFRobot:
     """
     Represents a 2-degree-of-freedom (DOF) robot arm with two joints and one end effector.
     Includes methods for calculating forward kinematics (FPK), inverse kinematics (IPK),
@@ -682,83 +685,91 @@ class FiveDOFRobot:
 
         Args:
             EE: EndEffector object containing desired position and orientation.
-            soln: Optional parameter for multiple solutions (not implemented).
+            soln: Optional parameter for multiple solutions.
         """
-        ########################################
-        print("")
+
         x, y, z = EE.x, EE.y, EE.z
-        print("EE", x, y, z, np.rad2deg(EE.rotx), np.rad2deg(EE.roty), np.rad2deg(EE.rotz))
 
-        R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz)) 
+        R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz))
         R_05_K = R_05 @ K
-        print("R05\n", np.round(R_05, 3))
-        print("R05 K", np.round((R_05_K), 3))
 
-        print("W disp", np.round((self.l4 + self.l5) * (R_05_K), 3))
         p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05_K))
 
         wx = p_wrist[0]
         wy = p_wrist[1]
         wz = p_wrist[2]
-        print("wrist", np.round(wx, 2), np.round(wy, 2), np.round(wz, 2))
-
-        # wx = x - abs((self.l4 + self.l5) * R_05[0, 2])
-        # wy = y - abs((self.l4 + self.l5) * R_05[1, 2])
-        # wz = z - abs((self.l4 + self.l5) * R_05[2, 2])
 
         r = sqrt((wx**2 + wy**2) + ((wz - self.l1) ** 2))
-        print("r", r)
 
-        self.theta[0] = atan2(y, x) + np.pi # seems to give desired - 180
-        print("th1", np.rad2deg(self.theta[0])) 
+        # Theta 1 standard solve
+        j1 = wraptopi(atan2(y, x) + np.pi)  # seems to give desired - 180
 
-        # print((r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2))
-        # self.theta[1] = acos(
-        #     (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2)
-        # ) + atan2(sqrt(wx**2 + wy**2), (wz - self.l1))
-        # print("th2", np.rad2deg(self.theta[1]))
+        # Theta 2 standard solve
+        alpha = acos((r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2))
+        phi = acos((wz - self.l1) / (r))
+        j2 = alpha + phi
 
-        # self.theta[2] = acos(
-        #     (wx**2 + wy**2 - self.l2**2 - self.l3**2 + (wz - self.l1) ** 2)
-        #     / 2
-        #     * self.l2
-        #     * self.l3
-        # )
+        # Theta 3 standard solve
+        j3 = acos((r**2 - self.l2**2 - self.l3**2) / (2 * self.l2 * self.l3))
 
-        alpha = acos( (r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2) )
-        phi = acos( (wz - self.l1) / (r) )
-        self.theta[1] = alpha + phi
-        print("th2", np.round(np.rad2deg(self.theta[1]), 2))
+        # Set of 4 potential solutions
+        #! @EarlJr53 interested in adding more solutions perhaps?
+        solns = np.array(
+            [
+                # Standard configuration
+                [j1, j2, j3, 0, 0],
+                # Flipped elbow
+                [j1, -alpha + phi, -j3, 0, 0],
+                # Mirrored base
+                [wraptopi(j1 + PI), -alpha - phi, -j3, 0, 0],
+                # Mirrored base, flipped elbow
+                [wraptopi(j1 + PI), alpha - phi, j3, 0, 0],
+            ]
+        )
 
-        self.theta[2] = acos( (r**2 - self.l2**2 - self.l3**2) / (2 * self.l2 * self.l3) )
-        print("th3", np.round(np.rad2deg(self.theta[2]), 2))
+        # Keep track of how many valid solutions have been "skipped"
+        valid_solns_count = 0
 
-        mini_DH = [
-            [self.theta[0], self.l1, 0, np.pi / 2],
-            [(np.pi / 2) + self.theta[1], 0, self.l2, 0],
-            [-self.theta[2], 0, self.l3, 0],
-        ]
+        for angs in solns:
+            # Temporary DH matrix
+            mini_DH = [
+                [angs[0], self.l1, 0, np.pi / 2],
+                [(np.pi / 2) + angs[1], 0, self.l2, 0],
+                [-angs[2], 0, self.l3, 0],
+            ]
 
-        t_03 = np.eye(4)
-        for dh_item in mini_DH:
-            t_temp = dh_to_matrix(dh_item)
-            t_03 = t_03 @ t_temp
+            # Translation matrix from 0 to 3
+            t_03 = np.eye(4)
+            for dh_item in mini_DH:
+                t_temp = dh_to_matrix(dh_item)
+                t_03 = t_03 @ t_temp
 
-        R_03 = t_03[:3, :3]
-        R_35 = np.transpose(R_03) @ R_05
-        print(np.round(R_35, 3))
-        
-        # TODO fix theta 4 calc
-        # r_wrist = rotm_to_euler(R_35)
-        # print(np.round(np.rad2deg(r_wrist), 2))
-        # for n in range(9):
-        #     print(np.round(np.rad2deg(asin(R_35[int(n/3), n%3])),2))
+            # Rotation matrix from 0 to 3
+            R_03 = t_03[:3, :3]
 
-        # self.theta[3] = r_wrist[0]
-        self.theta[3] = asin(R_35[1,2])
-        print("th4", np.round(np.rad2deg(self.theta[3]), 2))
-        self.theta[4] = -asin(R_35[2,0])
-        print("th5", np.round(np.rad2deg(self.theta[4]), 2))
+            # Rotation matrix from 3 to 5
+            R_35 = np.transpose(R_03) @ R_05
+
+            # Solve for Theta 4 and Theta 5
+            angs[3] = atan2(R_35[1, 2], R_35[0, 2])
+            angs[4] = wraptopi(atan2(R_35[2, 0], R_35[2, 1]) + PI)
+
+            # Check if the current configuration is valid
+            if check_joint_limits(angs, self.theta_limits):
+                # Check if we've reached either the requested `soln` or the last valid solution
+                if soln is valid_solns_count or valid_solns_count is len(solns) - 1:
+                    self.theta = angs
+                    break
+                # "Skip" valid solutions until the requested `soln`
+                else:
+                    last_valid = angs  # Hang onto the most recent valid solution
+                    valid_solns_count += 1
+            # If we've made it to the end and don't have another valid solution, use the most recent valid one
+            elif valid_solns_count is len(solns) - 1:
+                self.theta = last_valid
+
+        # Include this to automatically activate FPK
+        self.calc_forward_kinematics(self.theta, True)
 
         ########################################
 
