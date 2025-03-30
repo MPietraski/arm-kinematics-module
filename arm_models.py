@@ -1,3 +1,4 @@
+import time
 from math import sin, cos, atan, acos, asin, sqrt, atan2
 import numpy as np
 from matplotlib.figure import Figure
@@ -675,7 +676,7 @@ class FiveDOFRobot:
                 [0, sin(dh_item[3]), cos(dh_item[3]), dh_item[1]],
                 [0, 0, 0, 1],
             ]
-
+        
         # Calculate robot points (positions of joints)
         self.calc_robot_points()
 
@@ -773,15 +774,140 @@ class FiveDOFRobot:
 
         ########################################
 
-    def calc_numerical_ik(self, EE: EndEffector, tol=0.01, ilimit=50):
+    def calc_numerical_ik(self, EE: EndEffector, tol=0.01, ilimit=1000):
         """Calculate numerical inverse kinematics based on input coordinates."""
 
         ########################################
+        np.set_printoptions(suppress=True)
+        
+        xd = np.asarray([EE.x, EE.y, EE.z, EE.rotx, EE.roty, EE.rotz])
+        thi = [0, 0, 0, 0, 0]
+        thi = self.theta.copy()
+        self.calc_forward_kinematics(thi, radians=True)
+        f_thi = np.asarray([self.ee.x, self.ee.y, self.ee.z, self.ee.rotx, self.ee.roty, self.ee.rotz])
+        err = xd - f_thi
 
-        # insert your code here
+        resets = 0
+
+        count = 0
+
+        while np.linalg.norm(err) > tol and resets < 100:
+            while count < ilimit:
+                count += 1
+                print("th i\t", np.rad2deg(thi).round(2))
+                print("Xd\t", xd.round(2))
+                print("X\t", f_thi.round(2))
+                print("error\t", err.round(2))
+                print(np.round(np.linalg.norm(err), 5))
+
+                # Compute jacobian 
+                Jv = np.zeros((self.num_dof, 3))
+                Jw = np.zeros((self.num_dof, 3))
+                H0_n = np.eye(4)
+                for i in range(len(self.T)):
+                    H0_n = H0_n @ self.T[i]
+                r0_n = H0_n[:3, 3]
+                for i in range(self.num_dof):
+                    H0_i = np.eye(4)
+                    for j in range(i):
+                        H0_i = H0_i @ self.T[j]
+                    R0_i = H0_i[:3, :3]
+                    r0_i = H0_i[:3, 3]
+                    ri_n = r0_n - r0_i
+                    # print("d", ri_n)
+                    if i == 4:
+                        zi = R0_i @ np.array([[1], [0], [0]])
+                    else:
+                        zi = R0_i @ np.array([[0], [0], [1]])
+
+                    zi_T = np.transpose(zi)
+                    Jvi = np.cross(zi_T, ri_n)
+                    # print("Jv\n", Jvi)
+                    Jwi = zi_T.copy()
+                    # print(R0_i)
+                    # print(zi_T)
+                    # print("Jw\n", Jwi)
+                    Jv[i] = Jvi[0]
+                    Jw[i] = Jwi[0]
+                Jv = np.transpose(Jv)
+                Jw = np.transpose(Jw)
+                J = np.concatenate((Jv, Jw))
+                J[:,2] = -J[:,2]
+                # print(np.transpose(J))
+                J_inv = np.linalg.pinv(J)
+                # det_J = np.linalg.det(np.dot(J_inv, np.transpose(J_inv)))
+                # print("det", det_J)
+                # print(J)
+                # print(J_inv)
+                step = J_inv @ (err*0.1)
+                print("step\t", np.rad2deg((step)))
+                print("max\t", max(abs(np.rad2deg(step))))
+                while max(abs(np.rad2deg(step))) > 100:
+                    print("fixing")
+                    step = step * 0.1
+                # if sum(abs(np.rad2deg(step))) < 0.1 and np.linalg.norm(err) > 0.015:
+                #     print("fixing")
+                #     step *= 1e5
+                    
+                print("step\t", np.rad2deg((step)).round(2))
+                print("th i\t", np.rad2deg(thi).round(2))
+
+                thi = thi + step
+                print("th i+1\t", np.rad2deg(thi).round(2))
+                for joint, limits in enumerate(self.theta_limits):
+                    if thi[joint] < limits[0]:
+                        # print(np.rad2deg(limits[0] - thi[joint]))
+                        # if np.rad2deg(limits[0] - thi[joint]) > 5:
+                        #     thi = [0, 0, 0, 0, 0]
+                        #     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                        #     thi[joint] = limits[0]
+                        # else:
+                        thi[joint] = limits[0] + np.pi/3
+                    elif thi[joint] > limits[1]:
+                        # print(np.rad2deg(thi[joint] - limits[1]))
+                        # if np.rad2deg(thi[joint] - limits[1]) > 5:
+                        #     thi = [0, 0, 0, 0, 0]
+                        #     print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                        #     thi[joint] = limits[1]
+                        # else:
+                        thi[joint] = limits[0] - np.pi/3
+
+
+                print("th i+1\t", np.rad2deg(thi).round(2))
+                # for n in range(len(thi)):
+                #     thi[n] = wraptopi(thi[n])
+                # print("th i+1\t", np.rad2deg(thi).round(2))
+                self.theta = thi.copy()
+
+                self.calc_forward_kinematics(thi, radians=True)
+                print("self\t", np.rad2deg(self.theta).round(2))
+                f_thi = np.asarray([self.ee.x, self.ee.y, self.ee.z, self.ee.rotx, self.ee.roty, self.ee.rotz])
+                # thi = self.theta.copy()
+                err = xd - f_thi
+                print("")
+                # time.sleep(.1)
+
+            if np.linalg.norm(err) > tol:
+                resets += 1
+                count = 0
+                thi = [
+                    np.deg2rad( np.random.randint( int(np.rad2deg(lim[0])) , int(np.rad2deg(lim[1])) ) ) for lim in self.theta_limits
+                ]
+
+                self.theta = thi.copy()
+
+                self.calc_forward_kinematics(thi, radians=True)
+                print("self\t", np.rad2deg(self.theta).round(2))
+                f_thi = np.asarray([self.ee.x, self.ee.y, self.ee.z, self.ee.rotx, self.ee.roty, self.ee.rotz])
+                # thi = self.theta.copy()
+                err = xd - f_thi
+        ##
+        self.theta = thi.copy()
 
         ########################################
         self.calc_forward_kinematics(self.theta, radians=True)
+        print("X\t", np.asarray([self.ee.x, self.ee.y, self.ee.z, self.ee.rotx, self.ee.roty, self.ee.rotz]).round(2))
+        print("")
 
     def calc_velocity_kinematics(self, vel: list):
         """
@@ -806,14 +932,18 @@ class FiveDOFRobot:
             R0_i = H0_i[:3, :3]
             r0_i = H0_i[:3, 3]
             ri_n = r0_n - r0_i
-
-            zi = R0_i @ np.array([[0], [0], [1]])
+            
+            if i != 4:
+                zi = R0_i @ np.array([[0], [0], [1]])
+            else:
+                zi = R0_i @ np.array([[1], [0], [0]])
             zi_T = np.transpose(zi)
 
             Jvi = np.cross(zi_T, ri_n)
             Jv[i] = Jvi[0]
 
         Jv = np.transpose(Jv)
+        Jv[:,2] = -Jv[:,2]
         print(Jv)
 
         # (pseudo) Invert jacobian
