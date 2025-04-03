@@ -9,6 +9,7 @@ from arm_models import Robot
 from helper_fcns.utils import EndEffector
 import time
 from pynput import keyboard
+import yaml
 
 
 class Visualizer:
@@ -135,9 +136,16 @@ class Visualizer:
 
         self.ik2_move_button = ttk.Button(self.control_frame, text="Solve 2", command=self.solve_IK2)
         self.ik2_move_button.grid(column=1, row=row_number, columnspan=1, pady=2)
+        row_number += 3
 
-        self.ik3_move_button = ttk.Button(self.control_frame, text="Num Solve", command=self.numerical_solve)
-        self.ik3_move_button.grid(column=2, row=row_number, columnspan=1, pady=2)
+        self.ik3_move_button = ttk.Button(self.control_frame, text="Solve 3", command=self.solve_IK3)
+        self.ik3_move_button.grid(column=0, row=row_number, columnspan=1, pady=2)
+
+        self.ik4_move_button = ttk.Button(self.control_frame, text="Solve 4", command=self.solve_IK4)
+        self.ik4_move_button.grid(column=1, row=row_number, columnspan=1, pady=2)
+
+        self.ik5_move_button = ttk.Button(self.control_frame, text="Num Solve", command=self.numerical_solve)
+        self.ik5_move_button.grid(column=2, row=row_number, columnspan=1, pady=2)
         row_number += 3
 
         # ------------------------------------------------------------------------------------------------
@@ -152,6 +160,20 @@ class Visualizer:
 
         self.vk_deactivate_button = ttk.Button(self.control_frame, text="Deactivate VK", command=self.deactivate_VK)
         self.vk_deactivate_button.grid(column=1, row=row_number, columnspan=1, pady=2)
+        row_number += 3
+
+        # ------------------------------------------------------------------------------------------------
+        # Trajectory generation
+        # ------------------------------------------------------------------------------------------------
+        self.tg_entry_title = ttk.Label(self.control_frame, text="Trajectory Generation:", font=("Arial", 13, "bold"))
+        self.tg_entry_title.grid(column=0, row=row_number, columnspan=2, pady=(0, 10))
+        row_number += 1
+
+        self.tg_generate_button = ttk.Button(self.control_frame, text="Generate Trajectory", command=self.generate_traj)
+        self.tg_generate_button.grid(column=0, row=row_number, columnspan=1, pady=2)
+
+        self.tg_folow_button = ttk.Button(self.control_frame, text="Follow Trajectory", command=self.follow_traj)
+        self.tg_folow_button.grid(column=1, row=row_number, columnspan=1, pady=2)
         row_number += 1
 
         # Start the keyboard listener
@@ -213,6 +235,34 @@ class Visualizer:
         EE.rotz = float(self.pose_button[5].get())
 
         self.update_IK(pose=EE, soln=1)
+
+    def solve_IK3(self):
+        """
+        Solves the inverse kinematics for a given end-effector pose using the third solution.
+        """
+        EE = EndEffector()
+        EE.x = float(self.pose_button[0].get())
+        EE.y = float(self.pose_button[1].get())
+        EE.z = float(self.pose_button[2].get())
+        EE.rotx = float(self.pose_button[3].get())
+        EE.roty = float(self.pose_button[4].get())
+        EE.rotz = float(self.pose_button[5].get())
+
+        self.update_IK(pose=EE, soln=2)
+
+    def solve_IK4(self):
+        """
+        Solves the inverse kinematics for a given end-effector pose using the fourth solution.
+        """
+        EE = EndEffector()
+        EE.x = float(self.pose_button[0].get())
+        EE.y = float(self.pose_button[1].get())
+        EE.z = float(self.pose_button[2].get())
+        EE.rotx = float(self.pose_button[3].get())
+        EE.roty = float(self.pose_button[4].get())
+        EE.rotz = float(self.pose_button[5].get())
+
+        self.update_IK(pose=EE, soln=3)
 
 
     def numerical_solve(self):
@@ -280,6 +330,30 @@ class Visualizer:
         self.vk_status = False
 
 
+    def generate_traj(self):
+        """
+        Reads waypoint data from yaml file and plots points in 3D visualization
+        """
+        print('Trajectory Generation Mode Activated! \n Generating trajectory...')
+
+        # get pid_gains from yaml file
+        with open('waypoints.yml', 'r') as file:
+            waypoints = yaml.safe_load(file)
+
+        self.waypoint_idx = 0
+        self.robot.update_waypoints(waypoints['points'])
+        self.robot.plot_3D()
+        self.canvas.draw()
+
+    
+    def follow_traj(self):
+        """
+        TBA
+        """
+        pass
+
+
+
     def check_vk_status(self):
         """
         Checks and returns the status of the velocity kinematics.
@@ -336,7 +410,7 @@ class Visualizer:
 
 
 
-def get_robot_type(robot_type: str):
+def get_robot_type(robot_type: str) -> str:
     """
     Maps the robot type argument to a human-readable string.
     
@@ -357,6 +431,7 @@ def get_robot_type(robot_type: str):
         return 'Five-DOF'
     else:
         raise ValueError(f"[ERROR] Unsupported robot type '{robot_type}'. Please provide one of the available types ('2-dof', 'scara', '5-dof').")
+
 
 
 def main():
