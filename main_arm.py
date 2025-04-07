@@ -1,12 +1,12 @@
-
-import sys
-sys.path.append('../')
 import argparse
+import numpy as np
 import tkinter as tk
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from arm_models import Robot
-from helper_fcns.utils import EndEffector
+from modules.arm_models import Robot
+import math
+from helper_fcns.utils import wraptopi, EndEffector
+from modules.trajectory_generator import MultiAxisTrajectoryGenerator
 import time
 from pynput import keyboard
 import yaml
@@ -27,8 +27,7 @@ class Visualizer:
             args (argparse.Namespace): The command-line arguments.
         """
         self.root = root
-        title = f"Robot Manipulator Visualization for a {args.robot_type} robot"
-        self.root.title(title)
+        self.root.title(f"Robot Manipulator Visualization for a {args.robot_type} robot")
 
         self.robot_type = args.robot_type
         self.robot = Robot(type=self.robot_type)
@@ -38,10 +37,8 @@ class Visualizer:
         self.vk_status_font = ('black')
 
         # Keyboard listener for controlling velocity
-        self.listener = keyboard.Listener(
-            on_press=self.on_press,
-            on_release=self.on_release
-        )
+        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
+        self.listener.start()
         self.v = [0, 0, 0]
 
         # Create the control frame for the GUI
@@ -50,7 +47,7 @@ class Visualizer:
 
         # Set up the kinematics panel
         self.set_kinematics_panel()
-
+        
         # Create the plot frame
         self.plot_frame = ttk.Frame(root)
         self.plot_frame.grid(row=0, column=1, padx=10, pady=10)
@@ -169,15 +166,15 @@ class Visualizer:
         self.tg_entry_title.grid(column=0, row=row_number, columnspan=2, pady=(0, 10))
         row_number += 1
 
-        self.tg_generate_button = ttk.Button(self.control_frame, text="Generate Trajectory", command=self.generate_traj)
+        self.tg_generate_button = ttk.Button(self.control_frame, text="Upload Waypoints", command=self.update_waypoints)
         self.tg_generate_button.grid(column=0, row=row_number, columnspan=1, pady=2)
 
-        self.tg_folow_button = ttk.Button(self.control_frame, text="Follow Trajectory", command=self.follow_traj)
-        self.tg_folow_button.grid(column=1, row=row_number, columnspan=1, pady=2)
-        row_number += 1
+        self.tg_follow_task_button = ttk.Button(self.control_frame, text="Generate (Task-space)", command=self.generate_traj_task_space)
+        self.tg_follow_task_button.grid(column=1, row=row_number, columnspan=1, pady=2)
 
-        # Start the keyboard listener
-        self.listener.start()
+        self.tg_follow_joint_button = ttk.Button(self.control_frame, text="Generate (Joint-space)", command=self.generate_traj_joint_space)
+        self.tg_follow_joint_button.grid(column=2, row=row_number, columnspan=1, pady=2)
+        row_number += 1
 
 
     def joints_from_sliders(self, val):
@@ -204,13 +201,11 @@ class Visualizer:
         Resets all joint angles to 0 and updates the forward kinematics.
         """
         theta = [0.0] * self.robot.num_joints
+        self.robot.reset_ee_trajectory()
         self.update_FK(theta)
 
 
-    def solve_IK1(self):
-        """
-        Solves the inverse kinematics for a given end-effector pose using the first solution.
-        """
+    def get_ee_from_input(self):
         EE = EndEffector()
         EE.x = float(self.pose_button[0].get())
         EE.y = float(self.pose_button[1].get())
@@ -218,23 +213,21 @@ class Visualizer:
         EE.rotx = float(self.pose_button[3].get())
         EE.roty = float(self.pose_button[4].get())
         EE.rotz = float(self.pose_button[5].get())
+        return EE
+    
 
-        self.update_IK(pose=EE, soln=0)
+    def solve_IK1(self):
+        """
+        Solves the inverse kinematics for a given end-effector pose using the first solution.
+        """
+        self.update_IK(pose=self.get_ee_from_input(), soln=0)
 
 
     def solve_IK2(self):
         """
         Solves the inverse kinematics for a given end-effector pose using the second solution.
         """
-        EE = EndEffector()
-        EE.x = float(self.pose_button[0].get())
-        EE.y = float(self.pose_button[1].get())
-        EE.z = float(self.pose_button[2].get())
-        EE.rotx = float(self.pose_button[3].get())
-        EE.roty = float(self.pose_button[4].get())
-        EE.rotz = float(self.pose_button[5].get())
-
-        self.update_IK(pose=EE, soln=1)
+        self.update_IK(pose=self.get_ee_from_input(), soln=1)
 
     def solve_IK3(self):
         """
@@ -269,32 +262,28 @@ class Visualizer:
         """
         Solves the inverse kinematics for a given end-effector pose using a numerical method.
         """
-        EE = EndEffector()
-        EE.x = float(self.pose_button[0].get())
-        EE.y = float(self.pose_button[1].get())
-        EE.z = float(self.pose_button[2].get())
-        EE.rotx = float(self.pose_button[3].get())
-        EE.roty = float(self.pose_button[4].get())
-        EE.rotz = float(self.pose_button[5].get())
-
-        self.update_IK(pose=EE, soln=1, numerical=True)
+        self.update_IK(pose=self.get_ee_from_input(), soln=1, numerical=True)
 
 
-    def update_FK(self, theta: list):
+    def update_FK(self, theta: list, display_traj=False):
         """
         Updates the forward kinematics plot based on the given joint angles.
 
         Args:
             theta (list): List of joint angles.
         """
+        if display_traj:
+            self.robot.update_ee_trajectory()
+        
         try:
             self.robot.update_plot(angles=theta)
             self.canvas.draw()
+            self.canvas.flush_events()
         except ValueError:
             tk.messagebox.showerror("Input Error", "Please enter valid numbers")
 
 
-    def update_IK(self, pose: EndEffector, soln=0, numerical=False):
+    def update_IK(self, pose: EndEffector, soln=0, numerical=False, display_traj=False):
         """
         Updates the inverse kinematics plot based on the given end-effector pose.
 
@@ -303,12 +292,19 @@ class Visualizer:
             soln (int, optional): The solution index to use. Defaults to 0.
             numerical (bool, optional): Whether to use a numerical solver. Defaults to False.
         """
+        if display_traj:
+            self.robot.update_ee_trajectory()
+        
         if numerical:
-            self.robot.update_plot(pose=pose, soln=soln, numerical=True)
+            self.robot.update_plot(pose=pose, soln=soln, numerical=False)
         else:
             self.robot.update_plot(pose=pose, soln=soln)
-
         self.canvas.draw()
+        self.canvas.flush_events()
+
+
+    def solve_IK(self, pose: EndEffector, soln=0):
+        return self.robot.solve_inverse_kinematics(pose, soln=soln)
 
 
     def activate_VK(self):
@@ -330,11 +326,12 @@ class Visualizer:
         self.vk_status = False
 
 
-    def generate_traj(self):
+    def update_waypoints(self):
         """
-        Reads waypoint data from yaml file and plots points in 3D visualization
+        Loads waypoints from a YAML file and updates the robot's internal waypoint list and plot.
         """
-        print('Trajectory Generation Mode Activated! \n Generating trajectory...')
+
+        print('Updating waypoints...')
 
         # get pid_gains from yaml file
         with open('waypoints.yml', 'r') as file:
@@ -346,12 +343,55 @@ class Visualizer:
         self.canvas.draw()
 
     
-    def follow_traj(self):
+    def generate_traj_task_space(self):
         """
-        TBA
+        Generates and visualizes a task-space trajectory using a polynomial interpolator between waypoints.
         """
-        pass
+    
+        print('Following trajectory in task space...')
+    
+        waypoints = self.robot.get_waypoints()
+        q0 = waypoints[0]
+        qf = waypoints[1]
 
+        traj = MultiAxisTrajectoryGenerator(method="cubic", mode="task", interval=[0, 1], ndof=len(q0), start_pos=q0, final_pos=qf)
+        traj_dofs = traj.generate(nsteps=50)
+
+        for i in range(50):
+            pos = [dof[0][i] for dof in traj_dofs]
+            ee = EndEffector(*pos, 0, -math.pi/2, wraptopi(math.atan2(pos[1], pos[0]) + math.pi))
+            self.update_IK(ee, soln=0, numerical=True, display_traj=True)
+            time.sleep(0.05)
+        
+        traj.plot()
+
+    
+    def generate_traj_joint_space(self):
+        """
+        Generates and visualizes a joint-space trajectory by solving inverse kinematics at waypoints
+        and interpolating between resulting joint configurations.
+        """
+
+        print('Following trajectory in joint space...')
+        
+        waypoints = self.robot.get_waypoints()
+
+        EE_0 = EndEffector(*waypoints[0], 0, 0, 0)
+        EE_f = EndEffector(*waypoints[1], 0, 0, 0)
+
+        q0 = np.rad2deg(self.robot.solve_inverse_kinematics(EE_0))
+        qf = np.rad2deg(self.robot.solve_inverse_kinematics(EE_f))
+
+        traj = MultiAxisTrajectoryGenerator(method="cubic", mode="joint", interval=[0, 1], ndof=len(q0), start_pos=q0, final_pos=qf)
+
+        traj_dofs = traj.generate(nsteps=50)
+
+        for i in range(50):
+            theta = [dof[0][i] for dof in traj_dofs]            
+            self.update_FK(theta=theta, display_traj=True) 
+            time.sleep(0.05)
+        
+        traj.plot()
 
 
     def check_vk_status(self):
@@ -407,6 +447,8 @@ class Visualizer:
                 self.v[2] = 0
             elif key.char == 's':
                 self.v[2] = 0
+
+
 
 
 

@@ -25,7 +25,7 @@ class Controls:
     vx: float = 0.0
     vy: float = 0.0
 
-
+@dataclass
 class EndEffector:
     x: float = 0.0
     y: float = 0.0
@@ -43,8 +43,9 @@ def rotm_to_euler(R) -> tuple:
 
     Returns:
         tuple: Roll, pitch, and yaw angles (in radians).
-    
+
     """
+    
     r11 = R[0,0] if abs(R[0,0]) > 1e-7 else 0.0
     r12 = R[0,1] if abs(R[0,1]) > 1e-7 else 0.0
     r21 = R[1,0] if abs(R[1,0]) > 1e-7 else 0.0
@@ -52,6 +53,23 @@ def rotm_to_euler(R) -> tuple:
     r32 = R[2,1] if abs(R[2,1]) > 1e-7 else 0.0
     r33 = R[2,2] if abs(R[2,2]) > 1e-7 else 0.0
     r31 = R[2,0] if abs(R[2,0]) > 1e-7 else 0.0
+
+    # print(f"R : {R}")
+
+    # if r32 == r33 == 0.0:
+    #     # print("special case")
+    #     # pitch is close to 90 deg, i.e. cos(pitch) = 0.0
+    #     # there are an infinitely many solutions, so we set yaw = 0
+    #     pitch, yaw = PI/2, 0.0
+    #     # r12: -sin(r)*cos(y) + cos(r)*sin(p)*sin(y) -> -sin(r)
+    #         # condition r12 to the range of asin [-1, 1]
+    #     r12 = min(1.0, max(r12, -1.0))
+    #     roll = -math.asin(r12)
+    # else:
+    #     roll = math.atan2(r32, r33)        
+    #     yaw = math.atan2(r21, r11)
+    #     denom = math.sqrt(r11 ** 2 + r21 ** 2)
+    #     pitch = math.atan2(-r31, denom)
 
     if abs(r31) != 1:
         roll = math.atan2(r32, r33)        
@@ -62,14 +80,18 @@ def rotm_to_euler(R) -> tuple:
     elif r31 == 1:
         # pitch is close to -90 deg, i.e. cos(pitch) = 0.0
         # there are an infinitely many solutions, so we choose one possible solution where yaw = 0
-        pitch, yaw = -PI/2, 0.0
-        roll = -math.atan2(r12, r22)
+        # pitch, yaw = -PI/2, 0.0
+        # roll = -math.atan2(r12, r22)
+        pitch, roll = -PI/2, 0.0
+        yaw = -math.atan2(r12, r22)
     
     elif r31 == -1:
         # pitch is close to 90 deg, i.e. cos(pitch) = 0.0
         # there are an infinitely many solutions, so we choose one possible solution where yaw = 0
-        pitch, yaw = PI/2, 0.0
-        roll = math.atan2(r12, r22)
+        # pitch, yaw = PI/2, 0.0
+        # roll = math.atan2(r12, r22)
+        pitch, roll = PI/2, 0.0
+        yaw = math.atan2(r12, r22)
         
 
     return roll, pitch, yaw
@@ -222,7 +244,7 @@ def near_zero(arr: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: An array with zeros where values are near zero, otherwise the original values.
     """
-    tol = 1e-6
+    tol = 1e-5
     return np.where(np.isclose(arr, 0, atol=tol), 0, arr)
 
 
