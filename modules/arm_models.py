@@ -315,8 +315,6 @@ class Robot:
         self.sub1.set_ylabel("y [m]")
 
 
-
-
 class TwoDOFRobot():
     """
     Represents a 2-degree-of-freedom (DOF) robot arm with two joints and one end effector.
@@ -730,11 +728,13 @@ class FiveDOFRobot:
         """
 
         x, y, z = EE.x, EE.y, EE.z
+        print(x, y, z, EE.rotx, EE.roty, EE.rotz)
 
         R_05 = euler_to_rotm((EE.rotx, EE.roty, EE.rotz))
         R_05_K = R_05 @ K
 
         p_wrist = [x, y, z] - ((self.l4 + self.l5) * (R_05_K))
+        print(p_wrist)
 
         wx = p_wrist[0]
         wy = p_wrist[1]
@@ -746,6 +746,9 @@ class FiveDOFRobot:
         j1 = wraptopi(atan2(y, x) + np.pi)  # seems to give desired - 180
 
         # Theta 2 standard solve
+        print(r**2 + self.l2**2 - self.l3**2)
+        print(2 * r * self.l2)
+        print(r, self.l2, self.l3)
         alpha = acos((r**2 + self.l2**2 - self.l3**2) / (2 * r * self.l2))
         phi = acos((wz - self.l1) / (r))
         j2 = alpha + phi
@@ -926,7 +929,6 @@ class FiveDOFRobot:
             "\n\t", np.round(min_err, 2), np.round(np.linalg.norm(min_err),2))
         print("")
                     
-
     def calc_numerical_ik(self, EE: EndEffector, tol=0.01, ilimit=500):
         """Calculate numerical inverse kinematics based on input coordinates."""
 
@@ -1080,17 +1082,21 @@ class FiveDOFRobot:
         # Recompute robot points based on updated joint angles
         self.calc_forward_kinematics(self.theta, radians=True)
 
-
     def solve_inverse_kinematics(self, EE: EndEffector, tol=1e-3, ilimit=500):
         """ Calculate numerical inverse kinematics based on input coordinates. """
 
         ########################################
 
         # insert your code here
+        self.calc_inverse_kinematics(EE)
+        return self.theta
 
         ########################################
 
-    
+    def solve_forward_kinematics(self, th, radians=False):
+        self.calc_forward_kinematics(th, radians=radians)
+        return [self.ee.x, self.ee.y, self.ee.z, self.ee.rotx, self.ee.roty, self.ee.rotz]
+
     def calc_robot_points(self):
         """Calculates the main arm points using the current joint angles"""
 

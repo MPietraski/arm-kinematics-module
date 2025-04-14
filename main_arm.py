@@ -351,6 +351,7 @@ class Visualizer:
         print('Following trajectory in task space...')
     
         waypoints = self.robot.get_waypoints()
+        print(waypoints)
         q0 = waypoints[0]
         qf = waypoints[1]
 
@@ -376,8 +377,8 @@ class Visualizer:
         
         waypoints = self.robot.get_waypoints()
 
-        EE_0 = EndEffector(*waypoints[0], 0, 0, 0)
-        EE_f = EndEffector(*waypoints[1], 0, 0, 0)
+        EE_0 = EndEffector(*waypoints[0], 0, -math.pi/2, wraptopi(math.atan2(waypoints[0][1], waypoints[0][0]) + math.pi))
+        EE_f = EndEffector(*waypoints[1], 0, -math.pi/2, wraptopi(math.atan2(waypoints[1][1], waypoints[1][0]) + math.pi))
 
         q0 = np.rad2deg(self.robot.solve_inverse_kinematics(EE_0))
         qf = np.rad2deg(self.robot.solve_inverse_kinematics(EE_f))
