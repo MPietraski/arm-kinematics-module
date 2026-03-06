@@ -156,7 +156,7 @@ A numerical IK algorithm is an iterative approach that finds a collection of joi
 
 The method we will follow is the Newton Raphson Method:
 
-![alt text](image.png)
+![alt text](media/numerical_method.png)
 
 **Compare the results between analytical and numerical IK**
 
